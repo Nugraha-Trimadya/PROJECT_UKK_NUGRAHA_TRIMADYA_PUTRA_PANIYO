@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Exports\ArrayExport;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Maatwebsite\Excel\Excel as ExcelWriter;
+use Maatwebsite\Excel\Facades\Excel;
 
 class UserController extends Controller
 {
@@ -150,24 +153,23 @@ class UserController extends Controller
 
     private function exportByRole(string $role)
     {
-        $users = User::where('role', $role)->orderBy('name')->get();
+        $rows = User::where('role', $role)
+            ->orderBy('name')
+            ->get()
+            ->map(function (User $user) {
+                return [
+                    $user->name,
+                    $user->email,
+                    $user->password_text ?: 'this account already edited the password',
+                ];
+            })
+            ->all();
 
-        $rows = [
-            ['Name', 'Email', 'Password'],
-        ];
-
-        foreach ($users as $user) {
-            $rows[] = [
-                $user->name,
-                $user->email,
-                $user->password_text ?: 'this account already edited the password',
-            ];
-        }
-
-        return response($this->toXls($rows), 200, [
-            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
-            'Content-Disposition' => "attachment; filename=\"users-{$role}-export.xls\"",
-        ]);
+        return Excel::download(
+            new ArrayExport(['Name', 'Email', 'Password'], $rows),
+            "users-{$role}-export.xls",
+            ExcelWriter::XLS
+        );
     }
 
     private function generatedPassword(string $email, int $id): string
@@ -175,18 +177,4 @@ class UserController extends Controller
         return strtolower(substr($email, 0, 4)) . $id;
     }
 
-    private function toXls(array $rows): string
-    {
-        $lines = ["\xEF\xBB\xBF"];
-        foreach ($rows as $row) {
-            $lines[] = implode("\t", array_map(function ($value) {
-                $text = (string) $value;
-                $text = str_replace(["\r\n", "\r", "\n", "\t"], [' ', ' ', ' ', ' '], $text);
-
-                return $text;
-            }, $row));
-        }
-
-        return implode("\r\n", $lines);
-    }
 }

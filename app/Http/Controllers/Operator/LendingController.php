@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Operator;
 
 use App\Http\Controllers\Controller;
+use App\Exports\ArrayExport;
 use App\Models\Item;
 use App\Models\Lending;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Excel as ExcelWriter;
+use Maatwebsite\Excel\Facades\Excel;
 
 class LendingController extends Controller
 {
@@ -106,45 +109,28 @@ class LendingController extends Controller
 
     public function export()
     {
-        // Ambil semua data untuk dibuat file Excel.
-        $lendings = Lending::with(['details.item', 'user'])->orderByDesc('id')->get();
-        $rows = [
-            // Header kolom sesuai tampilan yang diminta.
-            ['Item', 'Total', 'Name', 'Ket.', 'Date', 'Return Date', 'Edited By'],
-        ];
+        $rows = Lending::with(['details.item', 'user'])
+            ->orderByDesc('id')
+            ->get()
+            ->flatMap(function (Lending $lending) {
+                return $lending->details->map(function ($detail) use ($lending) {
+                    return [
+                        $detail->item?->name,
+                        $detail->qty,
+                        $lending->borrower_name,
+                        $lending->note ?: '-',
+                        optional($lending->lend_date)->translatedFormat('d F, Y'),
+                        $lending->return_date ? $lending->return_date->translatedFormat('d F, Y') : '-',
+                        $lending->user?->name,
+                    ];
+                });
+            })
+            ->all();
 
-        foreach ($lendings as $lending) {
-            foreach ($lending->details as $detail) {
-                $rows[] = [
-                    $detail->item?->name,
-                    $detail->qty,
-                    $lending->borrower_name,
-                    $lending->note ?: '-',
-                    optional($lending->lend_date)->translatedFormat('d F, Y'),
-                    $lending->return_date ? $lending->return_date->translatedFormat('d F, Y') : ' - ',
-                    $lending->user?->name,
-                ];
-            }
-        }
-
-        // Kirim file Excel sebagai download ke browser.
-        return response($this->toXls($rows), 200, [
-            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="lendings-export.xls"',
-        ]);
-    }
-
-    private function toXls(array $rows): string
-    {
-        // Format tab-separated supaya Excel bisa membukanya sebagai file .xls.
-        $lines = ["\xEF\xBB\xBF"];
-        foreach ($rows as $row) {
-            $lines[] = implode("\t", array_map(function ($value) {
-                $text = (string) $value;
-                return str_replace(["\r\n", "\r", "\n", "\t"], ' ', $text);
-            }, $row));
-        }
-
-        return implode("\r\n", $lines);
+        return Excel::download(
+            new ArrayExport(['Item', 'Total', 'Name', 'Ket.', 'Date', 'Return Date', 'Edited By'], $rows),
+            'lendings-export.xls',
+            ExcelWriter::XLS
+        );
     }
 }

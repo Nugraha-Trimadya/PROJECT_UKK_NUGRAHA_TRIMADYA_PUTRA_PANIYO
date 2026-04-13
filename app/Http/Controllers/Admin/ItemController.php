@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Exports\ArrayExport;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\LendingItem;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Excel as ExcelWriter;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ItemController extends Controller
 {
@@ -116,26 +119,27 @@ class ItemController extends Controller
 
     public function export()
     {
-        $items = Item::with('category')->orderBy('name')->get();
+        $rows = Item::with('category')
+            ->orderBy('name')
+            ->get()
+            ->map(function (Item $item) {
+                return [
+                    $item->category?->name,
+                    $item->name,
+                    $item->total,
+                    $item->repair,
+                    $item->active_lending_total,
+                    $item->available,
+                    $item->updated_at->translatedFormat('M d, Y'),
+                ];
+            })
+            ->all();
 
-        $rows = [
-            ['Category', 'Name Item', 'Total', 'Repair Total', 'Last Updated'],
-        ];
-
-        foreach ($items as $item) {
-            $rows[] = [
-                $item->category?->name,
-                $item->name,
-                $item->total,
-                $item->repair === 0 ? '-' : $item->repair,
-                $item->updated_at->translatedFormat('M d, Y'),
-            ];
-        }
-
-        return response($this->toXls($rows), 200, [
-            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="items-export.xls"',
-        ]);
+        return Excel::download(
+            new ArrayExport(['Category', 'Name Item', 'Total', 'Repair Total', 'Borrowed Total', 'Available', 'Last Updated'], $rows),
+            'items-export.xls',
+            ExcelWriter::XLS
+        );
     }
 
     public function lendingDetails(Item $item)
@@ -148,22 +152,4 @@ class ItemController extends Controller
         return view('admin.items.lending-details', compact('item', 'details'));
     }
 
-    private function toXls(array $rows): string
-    {
-        //rows adalaha data table dalam bentuk array
-        //
-        // $lines = ["\xEF\xBB\xBF"];
-        foreach ($rows as $row) {
-            $lines[] = implode("\t", array_map(function ($value) {
-                $text = (string) $value;
-                // Hilangkan karakter yang bisa mengacaukan format Excel.
-                $text = str_replace(["\r\n", "\r", "\n", "\t"], [' ', ' ', ' ', ' '], $text);
-
-                return $text;
-            }, $row));
-        }
-
-        //gabungin semua baris menjadi satu string 
-        return implode("\r\n", $lines);
-    }
 }

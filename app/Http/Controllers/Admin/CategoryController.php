@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Exports\ArrayExport;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Excel as ExcelWriter;
+use Maatwebsite\Excel\Facades\Excel;
 
 class CategoryController extends Controller
 {
@@ -76,38 +79,23 @@ class CategoryController extends Controller
 
     public function export()
     {
-        $categories = Category::withCount('items')->orderBy('name')->get();
+        $rows = Category::withCount('items')
+            ->orderBy('name')
+            ->get()
+            ->map(function (Category $category) {
+                return [
+                    $category->name,
+                    $category->description ?: '-',
+                    $category->items_count,
+                    $category->updated_at->translatedFormat('M d, Y'),
+                ];
+            })
+            ->all();
 
-        $rows = [
-            ['Name', 'Division PJ', 'Total Items', 'Last Updated'],
-        ];
-
-        foreach ($categories as $category) {
-            $rows[] = [
-                $category->name,
-                $category->description ?: '-',
-                $category->items_count,
-                $category->updated_at->translatedFormat('M d, Y'),
-            ];
-        }
-
-        return response($this->toXls($rows), 200, [
-            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="categories-export.xls"',
-        ]);
-    }
-
-    private function toXls(array $rows): string
-    {
-        $lines = ["\xEF\xBB\xBF"];
-
-        foreach ($rows as $row) {
-            $lines[] = implode("\t", array_map(function ($value) {
-                $text = (string) $value;
-                return str_replace(["\r\n", "\r", "\n", "\t"], ' ', $text);
-            }, $row));
-        }
-
-        return implode("\r\n", $lines);
+        return Excel::download(
+            new ArrayExport(['Name', 'Division PJ', 'Total Items', 'Last Updated'], $rows),
+            'categories-export.xls',
+            ExcelWriter::XLS
+        );
     }
 }

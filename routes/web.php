@@ -61,12 +61,12 @@ Route::middleware(['auth', 'role:operator'])->prefix('operator')->name('operator
     Route::get('/lendings', [LendingController::class, 'index'])->name('lendings.index');
     Route::get('/lendings/create', [LendingController::class, 'create'])->name('lendings.create');
     Route::post('/lendings', [LendingController::class, 'store'])->name('lendings.store');
-    // Route::post('/lendings/{lending}/returned', [LendingController::class, 'returned'])->name('lendings.returned');
-    // Route::delete('/lendings/{lending}', [LendingController::class, 'destroy'])->name('lendings.destroy');
-    // Route::get('/lendings/export', [LendingController::class, 'export'])->name('lendings.export');
+    Route::post('/lendings/{lending}/returned', [LendingController::class, 'returned'])->name('lendings.returned');
+    Route::delete('/lendings/{lending}', [LendingController::class, 'destroy'])->name('lendings.destroy');
+    Route::get('/lendings/export', [LendingController::class, 'export'])->name('lendings.export');
 
     // Route::get('/items', [OperatorItemController::class, 'index'])->name('items.index');
 
-    // Route::get('/users/{user}/edit', [OperatorUserController::class, 'edit'])->name('users.edit');
-    // Route::put('/users/{user}', [OperatorUserController::class, 'update'])->name('users.update');
+    Route::get('/users/{user}/edit', [OperatorUserController::class, 'edit'])->name('users.edit');
+    Route::put('/users/{user}', [OperatorUserController::class, 'update'])->name('users.update');
 });
